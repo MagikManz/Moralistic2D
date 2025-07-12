@@ -25,10 +25,10 @@ local function getObjectRotatedVertices(size: Vector2, position: Vector2, rot: n
     local sinTheta = math.sin(rotation)
 
     local corners = {
-        Vector2.new(-halfWidth, -halfHeight), -- top-left
-        Vector2.new(halfWidth, -halfHeight),  -- top-right
-        Vector2.new(halfWidth, halfHeight),   -- bottom-right
-        Vector2.new(-halfWidth, halfHeight),  -- bottom-left
+        Vector2.new(-halfWidth, -halfHeight),
+        Vector2.new(halfWidth, -halfHeight),
+        Vector2.new(halfWidth, halfHeight),
+        Vector2.new(-halfWidth, halfHeight),
     }
 
     local rotatedVertices = {}
@@ -40,22 +40,6 @@ local function getObjectRotatedVertices(size: Vector2, position: Vector2, rot: n
     end
 
     return rotatedVertices
-end
-
-
-local function createFramesForVerticies(verticies, parent): { Frame }
-    local frames = { }
-    for _, vertex in ipairs(verticies) do
-        local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(0, 5, 0, 5)
-        frame.Position = UDim2.new(0, vertex.X, 0, vertex.Y)
-        frame.BackgroundColor3 = Color3.new(1, 0, 0) -- Red color for visibility
-        frame.AnchorPoint = Vector2.new(0.5, 0.5)
-        frame.Parent = parent -- Assuming you want to parent it to the workspace
-        table.insert(frames, frame)
-    end
-
-    return frames
 end
 
 function Physics2D.getVertices(position: Vector2, size: Vector2, rotation: number): { Vector2 }
@@ -70,15 +54,6 @@ function Physics2D:UpdateVertices(preRenderPosition: Vector2?, preRenderSize: Ve
     self._rotation = preRenderRotation or objectInstance.AbsoluteRotation
 
     self._vertices = getObjectRotatedVertices(self._position, self._size, self._rotation)
-
-    if self._debugObject then
-        for _, frame in ipairs(self._verticesFrames) do
-            frame:Destroy() -- Clean up old frames
-        end
-
-        table.clear(self._verticesFrames)
-        self._verticesFrames = createFramesForVerticies(self._vertices, objectInstance.Parent)
-    end
 end
 
 function Physics2D.new(gameObject: BaseClass, debugObject: boolean?): Physics2D
