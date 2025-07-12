@@ -4,11 +4,25 @@ export type OverlapQueryResult = {
     intersectionPosition: Vector2
 }
 
+local camera = workspace.CurrentCamera
+
+local DEFAULT_SCREEN_SIZE = Vector2.new(1920, 1080)
+
+local function getScreenScale(): number
+    local viewportSize = camera.ViewportSize
+    return math.min(viewportSize.X, viewportSize.Y) / DEFAULT_SCREEN_SIZE.Y
+end
+
 local FALSE_VALUE = {
     collided = false,
     overlap = 0,
     intersectionPosition = Vector2.new(0, 0)
 }
+
+local function scaleVectorToWorld(worldVector: Vector2): Vector2
+    local worldSize = camera.ViewportSize / 2
+    return (worldSize - Vector2.new(worldVector.X, worldVector.Y)) * getScreenScale()
+end
 
 local function getIntersection(vertexA1: Vector2, vertexA2: Vector2, vertexB1: Vector2, vertexB2: Vector2): OverlapQueryResult
     local x1, y1 = vertexA1.X, vertexA1.Y
@@ -37,10 +51,15 @@ local function getIntersection(vertexA1: Vector2, vertexA2: Vector2, vertexB1: V
     local intersectionX = x1 + ua * (x2 - x1)
     local intersectionY = y1 + ua * (y2 - y1)
 
+    local scaledToWorld = scaleVectorToWorld(Vector2.new(intersectionX, intersectionY))
+
     return {
         collided = true,
         overlap = 0,
-        intersectionPosition = Vector2.new(intersectionX, intersectionY)
+        intersectionPosition = Vector2.new(
+            -scaledToWorld.X,
+            scaledToWorld.Y
+        )
     }
 end
 

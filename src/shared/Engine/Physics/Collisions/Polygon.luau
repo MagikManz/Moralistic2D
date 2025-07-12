@@ -1,3 +1,4 @@
+--!native
 export type OverlapQueryResult = {
     collided: boolean,
     overlap: number,
@@ -12,7 +13,7 @@ local function getPolygonAxes(vertices: { Vector2 }): { Vector2 }
         local nextVertex = vertices[(i % #vertices) + 1]
 
         local edge = nextVertex - currentVertex
-        local axis = Vector2.new(-edge.Y, edge.X).Unit
+        local axis = Vector2.new(edge.Y, edge.X).Unit
 
         table.insert(axes, axis)
     end
@@ -52,7 +53,10 @@ local function getPolygonOverlap(axes, verticesA: { Vector2 }, verticesB: { Vect
         local overlap = math.min(maxA, maxB) - math.max(minA, minB)
         if overlap < smallestOverlap then
             smallestOverlap = overlap
-            normal = axis
+            normal = if minA > minB then
+                axis
+            else
+                -axis
         end
     end
 
@@ -62,7 +66,6 @@ local function getPolygonOverlap(axes, verticesA: { Vector2 }, verticesB: { Vect
         normal = normal
     }
 end
-
 
 local function checkCollision(verticesA: { Vector2 }, verticesB: { Vector2 }): OverlapQueryResult
     local axesA = getPolygonAxes(verticesA)
@@ -83,9 +86,8 @@ local function checkCollision(verticesA: { Vector2 }, verticesB: { Vector2 }): O
         aOverlap.normal
     else
         bOverlap.normal
-    
+
     local overlap = math.min(aOverlap.overlap, bOverlap.overlap)
-    --print(overlap, ":", normal)
     return {
         collided = true,
         overlap = overlap,

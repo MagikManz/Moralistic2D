@@ -1,55 +1,70 @@
-local RunService = game:GetService("RunService")
-local Simulation = { 
+local Simulation: Simulation = { 
     Objects = { },
-}
+} :: Simulation
 
 local Collision = require(script.Parent.Collisions)
+local Gravity = require(script.Parent.Gravity)
 
 local Types = require(script.Parent.Types)
 
-type Physics2D = Types.Physics2D
+local camera = workspace.CurrentCamera
 
-local function createIntersectionPoint(physicsObject, intersectionPosition: Vector2, normal: Vector2)
+Simulation.Collision = Collision
+
+type Physics2D = Types.Physics2D
+type BaseClass = Types.BaseClass
+type Simulation = Types.Simulation
+
+local function getScreenScale(): number
+    local DEFAULT_SCREEN_SIZE = Vector2.new(1920, 1080)
+    local viewportSize = camera.ViewportSize
+    return math.min(viewportSize.X, viewportSize.Y) / DEFAULT_SCREEN_SIZE.Y
+end
+
+local function createIntersectionPoint(physicsObject: Physics2D, intersectionPosition: Vector2, normal: Vector2)
     if physicsObject._intersectionPoint ~= nil then
         physicsObject._intersectionPoint:Destroy()
         physicsObject._intersectionPoint = nil
     end
 
-    if not physicsObject.Instance or not physicsObject.Instance.Parent then
+    local instance = physicsObject._ref.Instance
+    if instance == nil or instance.Parent == nil then
         return
     end
 
-    local absolutePosition = physicsObject.Instance.AbsolutePosition
-    local absoluteSize = physicsObject.Instance.AbsoluteSize
-
-    local middlePoint = absolutePosition + absoluteSize / 2
-
-    print(normal)
-
-    local offset = intersectionPosition - middlePoint
-    local intersectionPositionWorld = middlePoint + offset
-    intersectionPositionWorld = Vector2.new(
-        intersectionPositionWorld.X + normal.X * 5, 
-        intersectionPositionWorld.Y + normal.Y * 5
-    )
-
     local frame = Instance.new("Frame")
+    frame.Name = "IntersectionPoint"
     frame.Size = UDim2.fromOffset(10, 10)
-    frame.Position = UDim2.fromOffset(intersectionPositionWorld.X, intersectionPositionWorld.Y)
+    frame.Position = UDim2.new(0.5, intersectionPosition.X / 2 * getScreenScale() + normal.X, 0.5, intersectionPosition.Y / 2 * getScreenScale() - normal.Y) 
     frame.BackgroundColor3 = Color3.new(0, 1, 0.784314) -- Red color for intersection point
-    frame.Parent = physicsObject.Instance.Parent
+    frame.Parent = instance.Parent
+
+    print(frame.Position)
 
     physicsObject._intersectionPoint = frame
 end
 
-local function determineCollisionMethodBySize(physicsObject: Physics2D): string
-    if #physicsObject._vertices == 2 then
-        return "Line"
-    elseif #physicsObject._vertices > 2 then
-        return "Polygon"
-    else
-        error("Invalid number of vertices for collision detection")
+local function getIntersectionFacePosition(physicsObject: Physics2D, intersectionPosition: Vector2, normal: Vector2): Vector2
+    if physicsObject._intersectionPoint == nil then
+        return Vector2.zero
     end
+    
+    local gameObject = physicsObject._ref
+    local objectInstance = gameObject.Instance
+    if objectInstance == nil then
+        return Vector2.zero
+    end
+
+    local absoluteSize = objectInstance.AbsoluteSize :: Vector2
+    local offset = (intersectionPosition - absoluteSize):Ceil()
+  
+    print("offset", offset)
+    print("normal", normal)
+
+    return Vector2.new(
+        offset.X + normal.X, 
+        -(offset.Y + normal.Y)
+    )
 end
 
 function Simulation:AddObject(physicsObject: Physics2D)
@@ -61,14 +76,32 @@ function Simulation:RemoveObject(objectId: string)
 end
 
 function Simulation.Stepped(_deltaTime: number)
-    task.wait(0.1)
-    for _, physicsObject in pairs(Simulation.Objects) do
-        if not physicsObject.Instance then
+    for _id, physicsObject in pairs(Simulation.Objects) do
+        local gameObject = physicsObject._ref
+        local objectInstance = gameObject.Instance
+        if objectInstance == nil then
             continue
         end
 
+        local gravityForce = Vector2.zero
+        local newPosition = gameObject.Position
+        if gameObject.Anchored == false then
+            gravityForce = Gravity(
+                10, 
+                workspace.Gravity, 
+                Vector2.zero
+            )
+
+            newPosition += gravityForce * _deltaTime
+        else
+           -- continue
+        end
+
+        physicsObject:UpdateVertices(newPosition, gameObject.Size, gameObject.Rotation)
+
+        local didCollide = false
         for _, otherObject in pairs(Simulation.Objects) do
-            if otherObject._id ~= physicsObject._id and otherObject.Instance then
+            if otherObject._id ~= physicsObject._id and otherObject._ref.Instance then
                 local overlapQueryResult = Collision.Polygon(
                     physicsObject._vertices, 
                     otherObject._vertices
@@ -87,7 +120,7 @@ function Simulation.Stepped(_deltaTime: number)
                     for idxB, vertexB in ipairs(otherObject._vertices) do
                         local nextVertexA = physicsObject._vertices[(idxA % #physicsObject._vertices) + 1]
                         local nextVertexB = otherObject._vertices[(idxB % #otherObject._vertices) + 1]
-                        
+
                         local lineQueryResult = Collision.Line(
                             vertexA, 
                             nextVertexA, 
@@ -96,20 +129,32 @@ function Simulation.Stepped(_deltaTime: number)
                         )
 
                         if lineQueryResult.collided then
-                            warn("collided!")
-                            lineQueryResult.normal = Vector2
                             createIntersectionPoint(physicsObject, lineQueryResult.intersectionPosition, overlapQueryResult.normal)
-                            return
+                            newPosition = getIntersectionFacePosition(physicsObject, lineQueryResult.intersectionPosition, overlapQueryResult.normal)
+                            didCollide = true
                         end
                     end
                 end
             end
         end
+
+        physicsObject:UpdateVertices()
+
+        if didCollide then
+            warn("collided so we return")
+          --  gameObject.Position = newPosition
+            break
+        else
+           -- gameObject.Position = newPosition
+        end
     end
 end
 
-RunService.PreRender:Connect(function(deltaTime)
-    Simulation.Stepped(deltaTime)
+
+task.spawn(function()
+    while true do
+        Simulation.Stepped(task.wait())
+    end
 end)
 
-return Simulation
+return table.freeze(Simulation) :: Simulation

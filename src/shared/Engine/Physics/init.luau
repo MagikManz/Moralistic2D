@@ -4,12 +4,19 @@ Physics2D.__index = Physics2D
 local Simulation = require(script.Simulation)
 
 local Types = require(script.Types)
-export type Physics2D = Types.Physics2D
 
-local function getObjectRotatedVertices(objectInstance: GuiObject): { Vector2 }
-    local size = objectInstance.AbsoluteSize
-    local position = objectInstance.AbsolutePosition
-    local rotation = math.rad(objectInstance.AbsoluteRotation)
+Physics2D.Simulation = Simulation
+
+local camera = workspace.CurrentCamera
+
+export type Physics2D = Types.Physics2D
+export type BaseClass = Types.BaseClass
+
+local function getObjectRotatedVertices(size: Vector2, position: Vector2, rot: number): { Vector2 }
+    local screenCenter = camera.ViewportSize / 2
+    local objectCenter = screenCenter + position
+
+    local rotation = math.rad(-rot)
 
     local halfWidth = size.X / 2
     local halfHeight = size.Y / 2
@@ -17,28 +24,24 @@ local function getObjectRotatedVertices(objectInstance: GuiObject): { Vector2 }
     local cosTheta = math.cos(rotation)
     local sinTheta = math.sin(rotation)
 
-    local vertices = {
-        Vector2.new(-halfWidth, -halfHeight),
-        Vector2.new(halfWidth, -halfHeight),
-        Vector2.new(halfWidth, halfHeight),
-        Vector2.new(-halfWidth, halfHeight),
+    local corners = {
+        Vector2.new(-halfWidth, -halfHeight), -- top-left
+        Vector2.new(halfWidth, -halfHeight),  -- top-right
+        Vector2.new(halfWidth, halfHeight),   -- bottom-right
+        Vector2.new(-halfWidth, halfHeight),  -- bottom-left
     }
 
-    for i = #vertices, 2, -1 do
-        if (vertices[i] - vertices[i - 1]).Magnitude < 0.01 then
-            table.remove(vertices, i)
-        end
-    end
-
-    local rotatedVertices = { }
-    for _, vertex in ipairs(vertices) do
-        local rotatedX = vertex.X * cosTheta - vertex.Y * sinTheta
-        local rotatedY = vertex.X * sinTheta + vertex.Y * cosTheta
-        table.insert(rotatedVertices, Vector2.new(rotatedX + position.X + halfWidth, rotatedY + position.Y + halfHeight))
+    local rotatedVertices = {}
+    for _, corner in ipairs(corners) do
+        local rotatedX = corner.X * cosTheta - corner.Y * sinTheta
+        local rotatedY = corner.X * sinTheta + corner.Y * cosTheta
+        local rotatedPos = Vector2.new(rotatedX, rotatedY) + objectCenter
+        table.insert(rotatedVertices, rotatedPos)
     end
 
     return rotatedVertices
 end
+
 
 local function createFramesForVerticies(verticies, parent): { Frame }
     local frames = { }
@@ -55,12 +58,18 @@ local function createFramesForVerticies(verticies, parent): { Frame }
     return frames
 end
 
-function Physics2D:UpdateVertices()
-    local objectInstance = self.Instance
-    self._size = objectInstance.AbsoluteSize
-    self._position = objectInstance.AbsolutePosition
-    self._rotation = objectInstance.AbsoluteRotation
-    self._vertices = getObjectRotatedVertices(objectInstance)
+function Physics2D.getVertices(position: Vector2, size: Vector2, rotation: number): { Vector2 }
+    return getObjectRotatedVertices(size, position, rotation)
+end
+
+function Physics2D:UpdateVertices(preRenderPosition: Vector2?, preRenderSize: Vector2?, preRenderRotation: number?)
+    local objectInstance = self._ref.Instance
+
+    self._size = preRenderSize or objectInstance.AbsoluteSize
+    self._position = preRenderPosition or objectInstance.AbsolutePosition
+    self._rotation = preRenderRotation or objectInstance.AbsoluteRotation
+
+    self._vertices = getObjectRotatedVertices(self._position, self._size, self._rotation)
 
     if self._debugObject then
         for _, frame in ipairs(self._verticesFrames) do
@@ -72,12 +81,17 @@ function Physics2D:UpdateVertices()
     end
 end
 
-function Physics2D.new(objectId: string, objectInstance: GuiObject, debugObject: boolean?): Physics2D
+function Physics2D.new(gameObject: BaseClass, debugObject: boolean?): Physics2D
+    local objectId = gameObject._id
+    local objectInstance = gameObject.Instance
+
+    print(gameObject)
+
     assert(type(objectId) == "string", "Object ID must be a string")
     assert(typeof(objectInstance) == "Instance" and objectInstance:IsA("GuiObject"), "Object instance must be a GuiObject")
 
     local physicsObject = setmetatable({
-        Instance = objectInstance,
+        _ref = gameObject,
         _id = objectId,
         _debugObject = debugObject or false,
 
@@ -105,4 +119,4 @@ function Physics2D.new(objectId: string, objectInstance: GuiObject, debugObject:
     return physicsObject
 end
 
-return Physics2D
+return table.freeze(Physics2D) :: Physics2D
