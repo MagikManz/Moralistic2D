@@ -75,83 +75,95 @@ function Simulation:RemoveObject(objectId: string)
     self.Objects[objectId] = nil
 end
 
+
+local function getCollisionPoint(objectAVertices: { Vector2 }, objectBVertices: { Vector2 }): (boolean, Vector2)
+    for i = 1, #objectAVertices do
+        local vertexA1 = objectAVertices[i]
+        local vertexA2 = objectAVertices[(i % #objectAVertices) + 1]
+        for j = 1, #objectBVertices do
+            local vertexB1 = objectBVertices[j]
+            local vertexB2 = objectBVertices[(j % #objectBVertices) + 1]
+
+            local result = Collision.Line(
+                vertexA1, 
+                vertexA2, 
+                vertexB2, 
+                vertexB1
+            )
+
+            if result.collided then
+                return true, result.intersectionPosition
+            end
+        end
+    end
+
+    return false, Vector2.zero
+end
+
+local function getPolygonNormal(objectAVertices: { Vector2 }, objectBVertices: { Vector2 }): (boolean, Vector2)
+    local overlapResult = Collision.Polygon(objectAVertices, objectBVertices)
+    return overlapResult.collided, overlapResult.normal
+end
+
 function Simulation.Stepped(_deltaTime: number)
     for _id, physicsObject in pairs(Simulation.Objects) do
-        local gameObject = physicsObject._ref
-        local objectInstance = gameObject.Instance
+        local gameObjectA = physicsObject._ref
+        local objectInstance = gameObjectA.Instance
         if objectInstance == nil then
             continue
         end
 
         local gravityForce = Vector2.zero
-        local newPosition = gameObject.Position
-        if gameObject.Anchored == false then
+        local newPosition = gameObjectA.Position
+        if gameObjectA.Anchored == false then
             gravityForce = Gravity(
                 10, 
                 workspace.Gravity, 
                 Vector2.zero
             )
 
-            newPosition += gravityForce * _deltaTime
-        else
-           -- continue
+            newPosition += gravityForce * _deltaTime        
         end
 
-        physicsObject:UpdateVertices(newPosition, gameObject.Size, gameObject.Rotation)
+        local objectAVertices = physicsObject.getVertices(newPosition, gameObjectA.Size, gameObjectA.Rotation)
 
-        local didCollide = false
+        local objectCollided, collisionPosition, collisionNormal = false, Vector2.zero, Vector2.zero
         for _, otherObject in pairs(Simulation.Objects) do
-            if otherObject._id ~= physicsObject._id and otherObject._ref.Instance then
-                local overlapQueryResult = Collision.Polygon(
-                    physicsObject._vertices, 
-                    otherObject._vertices
-                )
-
-                if physicsObject._intersectionPoint ~= nil then
-                    physicsObject._intersectionPoint:Destroy()
-                    physicsObject._intersectionPoint = nil
-                end
-      
-                if overlapQueryResult.collided == false then
-                    continue
-                end
-
-                for idxA, vertexA in ipairs(physicsObject._vertices) do
-                    for idxB, vertexB in ipairs(otherObject._vertices) do
-                        local nextVertexA = physicsObject._vertices[(idxA % #physicsObject._vertices) + 1]
-                        local nextVertexB = otherObject._vertices[(idxB % #otherObject._vertices) + 1]
-
-                        local lineQueryResult = Collision.Line(
-                            vertexA, 
-                            nextVertexA, 
-                            vertexB, 
-                            nextVertexB
-                        )
-
-                        if lineQueryResult.collided then
-                            createIntersectionPoint(physicsObject, lineQueryResult.intersectionPosition, overlapQueryResult.normal)
-                            newPosition = getIntersectionFacePosition(physicsObject, lineQueryResult.intersectionPosition, overlapQueryResult.normal)
-                            didCollide = true
-                        end
-                    end
-                end
+            if otherObject._id == physicsObject._id or otherObject._ref.Instance == nil then
+                continue
             end
+
+            local gameObjectB = otherObject._ref
+            local objectBVertices = physicsObject.getVertices(gameObjectB.Position, gameObjectB.Size, gameObjectB.Rotation)
+
+            objectCollided, collisionNormal = getPolygonNormal(
+                objectAVertices,
+                objectBVertices
+            )
+
+            if objectCollided == false then
+                continue
+            end
+
+            objectCollided, collisionPosition = getCollisionPoint(
+                objectAVertices,
+                objectBVertices
+            )
         end
 
-        physicsObject:UpdateVertices()
+        if objectCollided then
+            print(collisionPosition, collisionNormal)
 
-        if didCollide then
-            warn("collided so we return")
-          --  gameObject.Position = newPosition
             break
         else
-           -- gameObject.Position = newPosition
+           gameObjectA.Position = newPosition
         end
     end
 end
 
 
 task.spawn(function()
+    task.wait(1)
     while true do
         Simulation.Stepped(task.wait())
     end

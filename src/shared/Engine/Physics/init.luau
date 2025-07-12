@@ -98,20 +98,6 @@ function Physics2D.new(gameObject: BaseClass, debugObject: boolean?): Physics2D
         _verticesFrames = { }
     }, Physics2D)
 
-    objectInstance:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-        physicsObject:UpdateVertices()
-    end)
-
-    objectInstance:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
-        physicsObject:UpdateVertices()
-    end)
-
-    objectInstance:GetPropertyChangedSignal("AbsoluteRotation"):Connect(function()
-        physicsObject:UpdateVertices()
-    end)
-
-    physicsObject:UpdateVertices()
-
     Simulation:AddObject(physicsObject)
 
     warn("Physics2D object created with ID:", physicsObject)
