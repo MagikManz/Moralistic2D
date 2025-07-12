@@ -154,7 +154,12 @@ function Part.new(properties: BasePart): ClassPart
                 error("Attempt to index a nil value", 2)
             end
 
-            return rawget(object, key) or object.Instance[key]
+            local value = rawget(object, key)
+            if value ~= nil then
+                return value
+            end
+
+            return object.Instance[key]
         end,
 
         __newindex = function(_self, key, value)

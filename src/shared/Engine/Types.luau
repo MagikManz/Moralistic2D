@@ -1,4 +1,6 @@
 export type BaseClass = {
+    Instance: Instance,
+
     Name: string,
     
     Size: Vector2,
@@ -13,10 +15,12 @@ export type BaseClass = {
 
     _id: string
 }
+export type Workspace =  {
 
-export type BasePart = BaseClass & {
-    Color: Color3,
-    Transparency: number,
+}
+
+export type Game = { 
+
 }
 
 return true
